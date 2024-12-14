@@ -1,0 +1,160 @@
+1. create hive table :
+      CREATE TABLE googleplaystore (
+    App STRING,
+    Category STRING,
+    Rating FLOAT,
+    Reviews INT,
+    Size STRING,
+    Installs STRING,
+    Type STRING,
+    Price FLOAT,
+    Content_Rating STRING,
+    Genres STRING,
+    Last_Updated STRING,
+    Current_Ver STRING,
+    Android_Ver STRING
+)
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY ','
+STORED AS TEXTFILE;
+
+
+
+2. Load Data into Hive Table :
+ 
+LOAD DATA LOCAL INPATH '/path/to/googleplaystore.csv' INTO TABLE googleplaystore;
+
+ANALYSIS : 
+
+1. Get All Apps in a Specific Category: 
+SELECT App, Rating, Reviews, Size, Price 
+FROM googleplaystore
+WHERE Category = 'ART_AND_DESIGN';
+
+
+2. Get Apps with Rating Greater than 4 :
+SELECT App, Rating, Category, Reviews, Price
+FROM googleplaystore
+WHERE Rating > 4.0;
+
+3. Find the App with the Highest Number of Reviews: 
+WITH max_reviews_cte AS (
+    SELECT MAX(Reviews) AS max_reviews
+    FROM googleplaystore
+)
+SELECT App, Reviews AS max_reviews
+FROM googleplaystore, max_reviews_cte
+WHERE Reviews = max_reviews_cte.max_reviews;D
+
+4.Get Apps Updated in a Specific Year :
+
+SELECT App, Last_Updated, Rating
+FROM googleplaystore
+WHERE Last_Updated LIKE '%2018%';
+
+
+5. Calculate the Average Rating by Content Rating:
+SELECT Content_Rating, AVG(Rating) AS avg_rating
+FROM googleplaystore
+GROUP BY Content_Rating;
+
+6. Find Top 5 Apps by Rating in Each Category: 
+WITH RankedApps AS (
+  SELECT 
+    App,
+    Category,
+    Rating,
+    ROW_NUMBER() OVER (PARTITION BY Category ORDER BY Rating DESC) AS rank
+  FROM googleplaystore
+  WHERE Rating IS NOT NULL
+)
+SELECT App, Category, Rating
+FROM RankedApps
+WHERE rank <= 5
+ORDER BY Category, Rating DESC;
+
+
+7. Find the Most Common Genres in Apps: 
+WITH GenreSplit AS (
+  SELECT App, explode(split(Genres, ';')) AS Genre
+  FROM googleplaystore
+)
+SELECT Genre, COUNT(DISTINCT App) AS num_apps
+FROM GenreSplit
+GROUP BY Genre
+ORDER BY num_apps DESC
+LIMIT 10;
+
+8. Find Apps with the Most Frequent Size Range (e.g., Apps under 50MB):
+
+WITH SizeCategory AS (
+    SELECT 
+        App,
+        CASE
+            WHEN Size LIKE '%M' THEN CAST(SUBSTRING(Size, 1, LENGTH(Size)-1) AS FLOAT) * 1024
+            WHEN Size LIKE '%K' THEN CAST(SUBSTRING(Size, 1, LENGTH(Size)-1) AS FLOAT)
+            ELSE NULL
+        END AS size_kb
+    FROM googleplaystore
+    WHERE Size IS NOT NULL
+)
+SELECT
+    CASE
+        WHEN size_kb < 51200 THEN 'Under 50MB'
+        WHEN size_kb BETWEEN 51200 AND 102400 THEN '50MB to 100MB'
+        WHEN size_kb BETWEEN 102400 AND 204800 THEN '100MB to 200MB'
+        ELSE 'Above 200MB'
+    END AS size_range,
+    COUNT(*) AS num_apps
+FROM SizeCategory
+GROUP BY 
+    CASE
+        WHEN size_kb < 51200 THEN 'Under 50MB'
+        WHEN size_kb BETWEEN 51200 AND 102400 THEN '50MB to 100MB'
+        WHEN size_kb BETWEEN 102400 AND 204800 THEN '100MB to 200MB'
+        ELSE 'Above 200MB'
+    END
+ORDER BY num_apps DESC;
+
+
+
+9. Calculate the Total Revenue for All Paid Apps:
+WITH Revenue AS (
+  SELECT 
+    App,
+    CAST(REGEXP_REPLACE(Installs, ',', '') AS BIGINT) AS installs,
+    CAST(REGEXP_REPLACE(Price, '\\$', '') AS FLOAT) AS price
+  FROM googleplaystore
+  WHERE Price LIKE '$%' -- Ensures only priced apps are considered
+)
+SELECT 
+    SUM(installs * price) AS total_revenue
+FROM Revenue;
+
+10. Find the Most Popular App in Terms of Installs :
+
+SELECT App, Installs
+FROM googleplaystore
+ORDER BY CAST(REGEXP_REPLACE(Installs, ',', '') AS BIGINT) DESC
+LIMIT 1;
+
+
+11. Identify the Growth of Apps Over Time by Year :
+
+SELECT
+    YEAR(STR_TO_DATE(Last_Updated, 'MMMM d, yyyy')) AS update_year,
+    COUNT(App) AS apps_released
+FROM googleplaystore
+GROUP BY update_year
+ORDER BY update_year DESC;
+
+
+12. Find the Average Number of Installs per App Type (Free vs Paid):
+
+SELECT 
+    Type,
+    AVG(CAST(REPLACE(Installs, ',', '') AS BIGINT)) AS avg_installs
+FROM googleplaystore
+WHERE Installs IS NOT NULL
+GROUP BY Type
+ORDER BY avg_installs DESC;

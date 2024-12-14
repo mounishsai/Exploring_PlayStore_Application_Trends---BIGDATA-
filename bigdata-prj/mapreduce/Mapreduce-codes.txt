@@ -1,0 +1,172 @@
+Average Rating per Category : 
+--------------------------
+
+Mapper Class : 
+
+import org.apache.hadoop.io.*;
+import org.apache.hadoop.mapreduce.Mapper;
+
+import java.io.IOException;
+
+public class AverageRatingMapper extends Mapper<LongWritable, Text, Text, DoubleWritable> {
+    @Override
+    protected void map(LongWritable key, Text value, Context context) throws IOException, InterruptedException {
+        String line = value.toString();
+        String[] fields = line.split(",");
+
+        if (!fields[1].isEmpty() && !fields[2].isEmpty() && !fields[2].equals("Rating")) {
+            String category = fields[1];
+            try {
+                double rating = Double.parseDouble(fields[2]);
+                context.write(new Text(category), new DoubleWritable(rating));
+            } catch (NumberFormatException e) {
+                // Skip invalid ratings
+            }
+        }
+    }
+}
+
+Reducer Class : 
+
+import org.apache.hadoop.io.*;
+import org.apache.hadoop.mapreduce.Reducer;
+
+import java.io.IOException;
+
+public class AverageRatingReducer extends Reducer<Text, DoubleWritable, Text, DoubleWritable> {
+    @Override
+    protected void reduce(Text key, Iterable<DoubleWritable> values, Context context) throws IOException, InterruptedException {
+        double sum = 0;
+        int count = 0;
+
+        for (DoubleWritable value : values) {
+            sum += value.get();
+            count++;
+        }
+
+        if (count > 0) {
+            context.write(key, new DoubleWritable(sum / count));
+        }
+    }
+}
+
+Driver Class : 
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.io.DoubleWritable;
+import org.apache.hadoop.io.Text;
+import org.apache.hadoop.mapreduce.Job;
+import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
+import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
+
+public class AverageRatingDriver {
+    public static void main(String[] args) throws Exception {
+        if (args.length != 2) {
+            System.err.println("Usage: AverageRatingDriver <input path> <output path>");
+            System.exit(-1);
+        }
+
+        Configuration conf = new Configuration();
+        Job job = Job.getInstance(conf, "Average Rating per Category");
+        job.setJarByClass(AverageRatingDriver.class);
+        job.setMapperClass(AverageRatingMapper.class);
+        job.setReducerClass(AverageRatingReducer.class);
+
+        job.setOutputKeyClass(Text.class);
+        job.setOutputValueClass(DoubleWritable.class);
+
+        FileInputFormat.addInputPath(job, new Path(args[0]));
+        FileOutputFormat.setOutputPath(job, new Path(args[1]));
+
+        System.exit(job.waitForCompletion(true) ? 0 : 1);
+    }
+}
+
+-----------------------------------------------------------------
+
+
+Total Reviews per Category : 
+------------------------
+
+Mapper Class :
+
+import org.apache.hadoop.io.*;
+import org.apache.hadoop.mapreduce.Mapper;
+
+import java.io.IOException;
+
+public class TotalReviewsMapper extends Mapper<LongWritable, Text, Text, IntWritable> {
+    @Override
+    protected void map(LongWritable key, Text value, Context context) throws IOException, InterruptedException {
+        String line = value.toString();
+        String[] fields = line.split(",");
+
+        if (!fields[1].isEmpty() && !fields[3].isEmpty() && !fields[3].equals("Reviews")) {
+            String category = fields[1];
+            try {
+                int reviews = Integer.parseInt(fields[3]);
+                context.write(new Text(category), new IntWritable(reviews));
+            } catch (NumberFormatException e) {
+                // Skip invalid review counts
+            }
+        }
+    }
+}
+
+
+Reducer Class : 
+
+import org.apache.hadoop.io.*;
+import org.apache.hadoop.mapreduce.Reducer;
+
+import java.io.IOException;
+
+public class TotalReviewsReducer extends Reducer<Text, IntWritable, Text, IntWritable> {
+    @Override
+    protected void reduce(Text key, Iterable<IntWritable> values, Context context) throws IOException, InterruptedException {
+        int totalReviews = 0;
+
+        for (IntWritable value : values) {
+            totalReviews += value.get();
+        }
+
+        context.write(key, new IntWritable(totalReviews));
+    }
+}
+
+
+Driver Class : 
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.io.IntWritable;
+import org.apache.hadoop.io.Text;
+import org.apache.hadoop.mapreduce.Job;
+import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
+import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
+
+public class TotalReviewsDriver {
+    public static void main(String[] args) throws Exception {
+        if (args.length != 2) {
+            System.err.println("Usage: TotalReviewsDriver <input path> <output path>");
+            System.exit(-1);
+        }
+
+        Configuration conf = new Configuration();
+        Job job = Job.getInstance(conf, "Total Reviews per Category");
+        job.setJarByClass(TotalReviewsDriver.class);
+        job.setMapperClass(TotalReviewsMapper.class);
+        job.setReducerClass(TotalReviewsReducer.class);
+
+        job.setOutputKeyClass(Text.class);
+        job.setOutputValueClass(IntWritable.class);
+
+        FileInputFormat.addInputPath(job, new Path(args[0]));
+        FileOutputFormat.setOutputPath(job, new Path(args[1]));
+
+        System.exit(job.waitForCompletion(true) ? 0 : 1);
+    }
+}
+
+-------------------------------------------------------------
